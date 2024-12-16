@@ -1,0 +1,83 @@
+import subprocess
+import json
+import os
+import sys
+from web3 import Web3
+
+# Utility function to run a shell command
+def run_command(command):
+    try:
+        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return result.stdout.decode(), result.stderr.decode()
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {e.stderr}")
+        sys.exit(1)
+
+# Run Slither to perform static analysis
+def run_slither(contract_file):
+    print("Running Slither Static Analysis...")
+    command = f"slither {contract_file}"
+    output, error = run_command(command)
+    print("Slither Output:")
+    print(output)
+
+    return output
+
+# Run MythX for deeper vulnerability analysis
+def run_mythx(contract_file):
+    print("Running MythX for vulnerability analysis...")
+    command = f"mythx analyze {contract_file}"
+    output, error = run_command(command)
+    
+    print("MythX Output:")
+    print(output)
+    
+    # Parsing the JSON output from MythX (if available)
+    try:
+        result = json.loads(output)
+        if "analysis" in result:
+            print("MythX Analysis Report:")
+            for item in result["analysis"]:
+                print(f"Severity: {item['severity']}, Description: {item['description']}")
+        else:
+            print("No vulnerabilities detected by MythX.")
+    except json.JSONDecodeError:
+        print("Error parsing MythX JSON response.")
+        print(error)
+
+# Checking the contract for common vulnerabilities with a manual check
+def check_common_vulnerabilities(contract_file):
+    print("\nChecking for common vulnerabilities...\n")
+    # Check for Reentrancy (common vulnerability)
+    with open(contract_file, 'r') as file:
+        content = file.read()
+
+    if "transfer(" in content or "call(" in content:
+        print("Warning: Potential Reentrancy risk detected. Make sure to use reentrancy guards.")
+    
+    # Check for Uninitialized Storage Pointers (Storage collision)
+    if "storage" in content and "pointer" in content:
+        print("Warning: Potential uninitialized storage pointers. Verify initialization of storage variables.")
+    
+    # Other checks can be added here...
+
+def main():
+    # Path to the Solidity contract file
+    contract_file = "path/to/your/contract.sol"
+
+    # Check if file exists
+    if not os.path.exists(contract_file):
+        print(f"Error: Contract file {contract_file} not found!")
+        sys.exit(1)
+
+    # Run Slither analysis
+    slither_output = run_slither(contract_file)
+
+    # Run MythX analysis
+    mythx_output = run_mythx(contract_file)
+
+    # Run common vulnerability checks
+    check_common_vulnerabilities(contract_file)
+
+if __name__ == "__main__":
+    main()
